@@ -1,0 +1,16 @@
+version: '3.3'
+
+services:
+    
+  server:
+    build: ./server
+    # volumes: <host>:<container>
+    # <host>: Automatically create a folder "data" in host (because it doesn't exist)
+    # <container>: Related to dockerfile. Automatically create a folder "data" in container (because it doesn't exist)
+    volumes:
+    - ./data:/data
+
+  client:
+    build: ./client
+    depends_on:
+    - server
