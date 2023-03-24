@@ -12,7 +12,10 @@ using std::cout;
 using std::endl;
 using std::vector;
 
+bool kill = false;
+
 #define DB if (self.id == 1184248810) cout
+#define KILL if (kill == true) cout
 
 Node self, successor, predecessor;
 
@@ -32,6 +35,15 @@ bool joined = false;
 Node getSuccessor() { return successor; }
 Node getPredecessor() { return predecessor; }
 vector<Node> getSucList() { return sucList; }
+bool killed(Node n) {
+  try {
+    rpc::client client(n.ip, n.port);
+    client.call("getPredecessor").as<Node>();
+  } catch (std::exception &e) {
+    return true;
+  }
+  return false;
+}
 
 void printFT() {
   for (int i = 0; i < FT_SIZE; ++i)
@@ -68,11 +80,27 @@ void join(Node n) {
 Node closest_preceding_node(uint64_t id) {
   //DB << self.id << ": closest_preceding_node \n";
   //try {
+    Node FTnode, SLnode;
     for (int i = FT_SIZE-1; i >= 0; --i) {
       if (fingerTable[i].id != 0 && inRange_wo_equal(fingerTable[i].id, self.id, id)) {
-        return fingerTable[i];
+        //return fingerTable[i];
+        FTnode = fingerTable[i];
+        break;
       }
     }
+
+    try {
+      rpc::client client(FTnode.ip, FTnode.port);
+      client.call("getPredecessor").as<Node>();
+      return FTnode;
+    } catch (std::exception &e) {
+      for (int i = SL_SIZE-1; i >= 0; --i) {
+        if (sucList[i].id != FTnode.id && inRange_wo_equal(sucList[i].id, self.id , id)) {
+          return sucList[i];
+        }
+      }
+    }
+
     return self;
 
   /*} catch (std::exception &e) {
@@ -85,22 +113,21 @@ Node find_successor(uint64_t id) {
   //return self;
   Node n0;
   try {
-    DB << "find_successor: " << self.id << " suc: " << successor.id << endl;
+    //cout << "find_successor: " << self.id << " suc: " << successor.id << endl;
+    //cout << self.id << "pre: " << predecessor.id << " suc: " << successor.id << endl;
     if (inRange(id, self.id, successor.id)) {
       return successor;
     }
     else {
       n0 = closest_preceding_node(id);
+      //cout << self.id << "n0 before: " << n0.id << endl;
       if (n0.id == self.id) n0 = successor;
+      //cout << self.id << "n0 after: " << n0.id << endl;
       rpc::client client(n0.ip, n0.port);
       return client.call("find_successor", id).as<Node>();
     }
   } catch (std::exception &e) {
-    cout << "ERROR: find_successor" << endl;
-    cout << self.port << ": " << n0.ip << ", " << n0.port << endl;
-    suc_idx = (suc_idx+1) % SL_SIZE;
-    successor = sucList[suc_idx];
-    cout << "*********** " << self.id << " successor update to " << successor.id << endl; 
+    cout << "ERROR: find_successor " << self.id << endl;
   }
 }
 
@@ -123,6 +150,7 @@ void notify(Node n0) {
   //cout << self.port << " notify " << n0.port << endl;
   try {
     if (predecessor.ip == "" || inRange_wo_equal(n0.id, predecessor.id, self.id)) {
+      cout << "*********** " << self.id << " predecessor update from " << predecessor.id << " to " << n0.id << endl;
       predecessor = n0;
     }
   } catch (std::exception &e) {
@@ -136,13 +164,14 @@ void stabilize() {
       //cout << self.id << ": pre: " << predecessor.id << " suc: " << successor.id << endl;
       Node x;
       try {
-        DB << "stabilize: " << self.id << " suc: " << successor.ip << ", " << successor.port << endl;
+        //DB << "stabilize: " << self.id << " suc: " << successor.ip << ", " << successor.port << endl;
         rpc::client oldSuc(successor.ip, successor.port); // work
         x = oldSuc.call("getPredecessor").as<Node>(); // not work
       } catch (std::exception &e) {
         suc_idx = (suc_idx+1) % SL_SIZE;
+        cout << "*********** " << self.id << " successor update from " << successor.id << " to " << sucList[suc_idx].id << endl;
         successor = sucList[suc_idx];
-        DB << "*********** " << self.id << " successor update to " << successor.id << endl;
+        kill = true;
       }
       if (x.ip != "" && inRange_wo_equal(x.id, self.id, successor.id)) {
         successor = x;
