@@ -6,11 +6,13 @@
 #include "rpc/client.h"
 #include <iostream>
 #include <string>
+#include <vector>
 using std::string;
 using std::cout;
 using std::endl;
+using std::vector;
 
-#define DB if (self.id == 1809317512) cout
+#define DB if (self.id == 1184248810) cout
 
 Node self, successor, predecessor;
 
@@ -21,12 +23,16 @@ const uint64_t RING_SIZE = (1UL<<RING_BIT);
 const uint64_t dis_base = 28;
 uint64_t next = 0;
 const int FT_SIZE = 4;
+const int SL_SIZE = 4;  // logN
 Node fingerTable[FT_SIZE];
+vector<Node> sucList(SL_SIZE);
+int suc_idx = 0;
 bool joined = false;
 
 Node getSuccessor() { return successor; }
 Node getPredecessor() { return predecessor; }
-//void initFT() { for (size_t i = 0; i < FT_SIZE; ++i) fingerTable[i].id = 0; }
+vector<Node> getSucList() { return sucList; }
+
 void printFT() {
   for (int i = 0; i < FT_SIZE; ++i)
     DB << self.id << "[" << i << "]: " << fingerTable[i].id << endl;
@@ -79,6 +85,7 @@ Node find_successor(uint64_t id) {
   //return self;
   Node n0;
   try {
+    DB << "find_successor: " << self.id << " suc: " << successor.id << endl;
     if (inRange(id, self.id, successor.id)) {
       return successor;
     }
@@ -91,6 +98,9 @@ Node find_successor(uint64_t id) {
   } catch (std::exception &e) {
     cout << "ERROR: find_successor" << endl;
     cout << self.port << ": " << n0.ip << ", " << n0.port << endl;
+    suc_idx = (suc_idx+1) % SL_SIZE;
+    successor = sucList[suc_idx];
+    cout << "*********** " << self.id << " successor update to " << successor.id << endl; 
   }
 }
 
@@ -117,29 +127,39 @@ void notify(Node n0) {
     }
   } catch (std::exception &e) {
     cout << "ERROR: notify" << endl;
-    cout << self.port << ": " << successor.ip << ", " << successor.port << endl;
   }
 }
 
 void stabilize() {
-  //DB << self.id << ": stabilize " << joined << endl;
   if (joined) {
-    //cout << self.id << ": pre: " << predecessor.id << " suc: " << successor.id << endl;  
     try {
-      //cout << self.id << ": pre: " << predecessor.id << " suc: " << successor.id << " (stabilize" << endl;  
-      rpc::client oldSuc(successor.ip, successor.port);
-      Node x = oldSuc.call("getPredecessor").as<Node>();
+      //cout << self.id << ": pre: " << predecessor.id << " suc: " << successor.id << endl;
+      Node x;
+      try {
+        DB << "stabilize: " << self.id << " suc: " << successor.ip << ", " << successor.port << endl;
+        rpc::client oldSuc(successor.ip, successor.port); // work
+        x = oldSuc.call("getPredecessor").as<Node>(); // not work
+      } catch (std::exception &e) {
+        suc_idx = (suc_idx+1) % SL_SIZE;
+        successor = sucList[suc_idx];
+        DB << "*********** " << self.id << " successor update to " << successor.id << endl;
+      }
       if (x.ip != "" && inRange_wo_equal(x.id, self.id, successor.id)) {
         successor = x;
       }
       rpc::client newSuc(successor.ip, successor.port);
       newSuc.call("notify", self);
+
+      vector<Node> suc_sucList = newSuc.call("getSucList").as<vector<Node>>();
+      sucList[0] = successor;
+      std::copy(suc_sucList.begin(), suc_sucList.end()-1, sucList.begin()+1);
+      suc_idx = 0;
+      /*for (int i = 0; i < SL_SIZE; ++i) {
+        cout << self.id << "[" << i << "] = " << sucList[i].id << endl;
+      }*/
+
     } catch (std::exception &e) {
-      cout << "---------------------------------------------\n";
       cout << "ERROR: stabilize" << endl;
-      cout << self.id << ": pre: " << predecessor.id << " suc: " << successor.id << endl;
-      cout << self.port << ": " << successor.ip << ", " << successor.port << endl;
-      cout << "---------------------------------------------\n";
     }
   }
 }
@@ -162,6 +182,7 @@ void register_rpcs() {
   add_rpc("notify", &notify);
   add_rpc("getSuccessor", &getSuccessor);
   add_rpc("getPredecessor", &getPredecessor);
+  add_rpc("getSucList", &getSucList);
 }
 
 void register_periodics() {
