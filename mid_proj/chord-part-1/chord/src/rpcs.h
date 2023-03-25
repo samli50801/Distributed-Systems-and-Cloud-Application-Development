@@ -31,6 +31,7 @@ Node fingerTable[FT_SIZE];
 vector<Node> sucList(SL_SIZE);
 int suc_idx = 0;
 bool joined = false;
+int repeat_count = 0;
 
 Node getSuccessor() { return successor; }
 Node getPredecessor() { return predecessor; }
@@ -96,6 +97,13 @@ Node closest_preceding_node(uint64_t id) {
     } catch (std::exception &e) {
       for (int i = SL_SIZE-1; i >= 0; --i) {
         if (sucList[i].id != FTnode.id && inRange_wo_equal(sucList[i].id, self.id , id)) {
+          try {
+            rpc::client client1(sucList[i].ip, sucList[i].port);
+            client1.call("getPredecessor").as<Node>();
+            return sucList[i];
+          } catch (std::exception &e) {
+            continue;
+          }
           return sucList[i];
         }
       }
@@ -120,9 +128,7 @@ Node find_successor(uint64_t id) {
     }
     else {
       n0 = closest_preceding_node(id);
-      //cout << self.id << "n0 before: " << n0.id << endl;
       if (n0.id == self.id) n0 = successor;
-      //cout << self.id << "n0 after: " << n0.id << endl;
       rpc::client client(n0.ip, n0.port);
       return client.call("find_successor", id).as<Node>();
     }
@@ -162,16 +168,23 @@ void stabilize() {
   if (joined) {
     try {
       //cout << self.id << ": pre: " << predecessor.id << " suc: " << successor.id << endl;
-      Node x;
+      Node x, test;
       try {
         //DB << "stabilize: " << self.id << " suc: " << successor.ip << ", " << successor.port << endl;
-        rpc::client oldSuc(successor.ip, successor.port); // work
-        x = oldSuc.call("getPredecessor").as<Node>(); // not work
+        rpc::client oldSuc1(successor.ip, successor.port); // work
+        x = oldSuc1.call("getPredecessor").as<Node>(); // not work
       } catch (std::exception &e) {
         suc_idx = (suc_idx+1) % SL_SIZE;
         cout << "*********** " << self.id << " successor update from " << successor.id << " to " << sucList[suc_idx].id << endl;
         successor = sucList[suc_idx];
-        kill = true;
+        try {
+          rpc::client oldSuc2(successor.ip, successor.port); // work
+          test = oldSuc2.call("getPredecessor").as<Node>(); // not work
+        } catch (std::exception &e) {
+          suc_idx = (suc_idx+1) % SL_SIZE;
+          cout << "*********** " << self.id << " successor update from " << successor.id << " to " << sucList[suc_idx].id << endl;
+          successor = sucList[suc_idx];
+        }
       }
       if (x.ip != "" && inRange_wo_equal(x.id, self.id, successor.id)) {
         successor = x;
@@ -183,9 +196,6 @@ void stabilize() {
       sucList[0] = successor;
       std::copy(suc_sucList.begin(), suc_sucList.end()-1, sucList.begin()+1);
       suc_idx = 0;
-      /*for (int i = 0; i < SL_SIZE; ++i) {
-        cout << self.id << "[" << i << "] = " << sucList[i].id << endl;
-      }*/
 
     } catch (std::exception &e) {
       cout << "ERROR: stabilize" << endl;
