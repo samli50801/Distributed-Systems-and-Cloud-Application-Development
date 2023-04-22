@@ -9,7 +9,8 @@ def new_client(ip, port):
     return msgpackrpc.Client(msgpackrpc.Address(ip, port))
 
 #
-my_node_ip = urllib.request.urlopen("http://169.254.169.254/latest/meta-data/public-ipv4").read().decode()
+#my_node_ip = urllib.request.urlopen("http://169.254.169.254/latest/meta-data/public-ipv4").read().decode()
+my_node_ip = '127.0.0.1'
 existing_node_ip = my_node_ip # by default
 
 ec2 = boto3.resource('ec2', "us-east-1")
