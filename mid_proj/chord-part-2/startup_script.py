@@ -25,7 +25,7 @@ for instance in instances:
 print("my_node_ip: ", my_node_ip)
 print('existing_node_ip: ', existing_node_ip)
 # Start Chord node
-os.system("./chord {} 5057 &".format(my_node_ip))
+os.system("/root/chord-part-2/chord {} 5057 &".format(my_node_ip))
 # Join existing Chord system
 #my_chord_client = new_client(my_node_ip, 5057)
 time.sleep(5)
