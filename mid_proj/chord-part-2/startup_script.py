@@ -43,8 +43,6 @@ os.system("/root/chord-part-2/chord {} 5057 &".format(my_node_ip))
 # Join existing Chord system
 my_chord_client = new_client(my_node_ip, 5057)
 existing_chord_client = new_client(existing_node_ip, 5057)
-for instance in instances:
-    if first_iter and instance.public_ip_address == my_node_ip:
 if first_inst:
     my_chord_client.call("create")
 else:
