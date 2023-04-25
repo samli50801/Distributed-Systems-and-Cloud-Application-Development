@@ -28,10 +28,12 @@ instances = ec2.instances.filter(
 
 first_iter = True
 first_inst = False
+running_instances = []
 for instance in instances:
-    if first_iter and instance.public_ip_address == my_node_ip:
+    '''if first_iter and instance.public_ip_address == my_node_ip:
         first_inst = True
-        first_iter = False
+        first_iter = False'''
+    running_instances.append(instance.public_ip_address)
     if instance.public_ip_address != my_node_ip:
         existing_node_ip = instance.public_ip_address
         break
@@ -47,7 +49,7 @@ existing_chord_client = new_client(existing_node_ip, 5057)
 
 time.sleep(20)
 
-if first_inst:
+if len(running_instances) == 1:
     my_chord_client.call("create")
 else:
     my_chord_client.call("join", existing_chord_client.call("get_info"))
